@@ -13,8 +13,6 @@ from social_auth.backends import SocialAuthBackend, BaseAuth, USERNAME
 from social_auth.exceptions import AuthException
 from social_auth.models import UserSocialAuth
 
-import pdb
-
 class DjangoBackend(SocialAuthBackend):
     name = 'django'
 
@@ -35,12 +33,6 @@ class DjangoAuth(BaseAuth):
         return reverse('django.contrib.auth.views.login')
 
     def auth_complete(self, *args, **kwargs):
-        pdb.set_trace()
-        '''
-        TODO: Need to verify that it is indeed a Django user
-        logged in, and not someone who's already logged in
-        using social-auth and hitting this url
-        '''
         user = kwargs['user']
         if user.is_authenticated():
             try:
