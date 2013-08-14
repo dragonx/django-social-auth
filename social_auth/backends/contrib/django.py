@@ -30,7 +30,11 @@ class DjangoAuth(BaseAuth):
     AUTH_BACKEND = DjangoBackend
 
     def auth_url(self):
-        return reverse('login')
+        url = reverse('login')
+        nexturl = self.request.GET.get('next')
+        if nexturl:
+            url += '?next=' + nexturl
+        return url
 
     def auth_complete(self, *args, **kwargs):
         user = kwargs['user']
