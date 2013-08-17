@@ -136,7 +136,8 @@ def complete_process(request, backend, *args, **kwargs):
         user = auth_complete(request, backend, *args, **kwargs)
     except IntegrityError:
         try:
-            ga_tracker.track_event(Event("Login",backend.AUTH_BACKEND.name+"CompleteError",""),
+            ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"CompleteError",
+                                   request.build_absolute_uri()),
                                    ga_session, ga_visitor)
         except:
             pass
@@ -192,7 +193,8 @@ def complete_process(request, backend, *args, **kwargs):
                       backend_setting(backend,
                                       'SOCIAL_AUTH_LOGIN_REDIRECT_URL') or \
                       DEFAULT_REDIRECT
-            ga_tracker.track_event(Event("Login",backend.AUTH_BACKEND.name+"Complete",""),
+            ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"Complete",
+                                   request.build_absolute_uri()),
                                    ga_session, ga_visitor)
         else:
             msg = setting('SOCIAL_AUTH_INACTIVE_USER_MESSAGE', None)
@@ -201,7 +203,8 @@ def complete_process(request, backend, *args, **kwargs):
     else:
         msg = setting('LOGIN_ERROR_MESSAGE', None)
         url = backend_setting(backend, 'LOGIN_ERROR_URL', LOGIN_ERROR_URL)
-        ga_tracker.track_event(Event("Login",backend.AUTH_BACKEND.name+"CompleteError",""),
+        ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"CompleteError",
+                               request.build_absolute_uri()),
                                ga_session, ga_visitor)
     if msg:
         messages.error(request, msg)
