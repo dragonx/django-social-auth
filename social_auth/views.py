@@ -18,12 +18,15 @@ from social_auth.utils import sanitize_redirect, setting, \
                               backend_setting, clean_partial_pipeline
 from social_auth.decorators import dsa_view, disconnect_view
 
+from pyga.requests import Tracker, Event, Session, Visitor
+
 
 DEFAULT_REDIRECT = setting('SOCIAL_AUTH_LOGIN_REDIRECT_URL',
                            setting('LOGIN_REDIRECT_URL'))
 LOGIN_ERROR_URL = setting('LOGIN_ERROR_URL', setting('LOGIN_URL'))
 PIPELINE_KEY = setting('SOCIAL_AUTH_PARTIAL_PIPELINE_KEY', 'partial_pipeline')
 
+GA_ID = setting('GOOGLE_ANALYTICS_ID', "").replace('UA', 'MO', 1)
 
 @dsa_view(setting('SOCIAL_AUTH_COMPLETE_URL_NAME', 'socialauth_complete'))
 def auth(request, backend):
@@ -105,11 +108,38 @@ def complete_process(request, backend, *args, **kwargs):
     # pop redirect value before the session is trashed on login()
     redirect_value = request.session.get(REDIRECT_FIELD_NAME, '') or \
                      request.REQUEST.get(REDIRECT_FIELD_NAME, '')
+
+    ga_tracker = Tracker(GA_ID, request.META.get('HTTP_HOST', ""))
+    utmz = request.COOKIES.get("__utmz")
+    if utmz:
+        try:
+            campaign = Campaign()
+            campaign.extract_from_utmz(utmz)
+            ga_tracker.campaign = campaign
+        except:
+            pass
+    ga_visitor = Visitor()
+    try:
+        ga_visitor.extract_from_utma(request.COOKIES.get("__utma",""))
+    except:
+        pass
+    ga_visitor.ip_address = request.META.get('REMOTE_ADDR')
+    ga_session = Session()
+    try:
+        ga_session.extract_from_utmb(request.COOKIES.get("__utmb"))
+    except:
+        pass
+
     # Django 1.5 allow us to define custom User Model, so integrity errors
     # can be raised.
     try:
         user = auth_complete(request, backend, *args, **kwargs)
     except IntegrityError:
+        try:
+            ga_tracker.track_event(Event("Login",backend.AUTH_BACKEND.name+"CompleteError",""),
+                                   ga_session, ga_visitor)
+        except:
+            pass
         url = setting('SIGNUP_ERROR_URL', setting('LOGIN_ERROR_URL'))
         return HttpResponseRedirect(url)
 
@@ -120,6 +150,8 @@ def complete_process(request, backend, *args, **kwargs):
         return HttpResponseRedirect(redirect_value)
 
     msg = None
+    
+
     if user:
         if getattr(user, 'is_active', True):
             # catch is_new flag before login() might reset the instance
@@ -160,6 +192,8 @@ def complete_process(request, backend, *args, **kwargs):
                       backend_setting(backend,
                                       'SOCIAL_AUTH_LOGIN_REDIRECT_URL') or \
                       DEFAULT_REDIRECT
+            ga_tracker.track_event(Event("Login",backend.AUTH_BACKEND.name+"Complete",""),
+                                   ga_session, ga_visitor)
         else:
             msg = setting('SOCIAL_AUTH_INACTIVE_USER_MESSAGE', None)
             url = backend_setting(backend, 'SOCIAL_AUTH_INACTIVE_USER_URL',
@@ -167,6 +201,8 @@ def complete_process(request, backend, *args, **kwargs):
     else:
         msg = setting('LOGIN_ERROR_MESSAGE', None)
         url = backend_setting(backend, 'LOGIN_ERROR_URL', LOGIN_ERROR_URL)
+        ga_tracker.track_event(Event("Login",backend.AUTH_BACKEND.name+"CompleteError",""),
+                               ga_session, ga_visitor)
     if msg:
         messages.error(request, msg)
 
