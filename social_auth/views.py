@@ -109,26 +109,29 @@ def complete_process(request, backend, *args, **kwargs):
     redirect_value = request.session.get(REDIRECT_FIELD_NAME, '') or \
                      request.REQUEST.get(REDIRECT_FIELD_NAME, '')
 
-    ga_tracker = Tracker(GA_ID, request.META.get('HTTP_HOST', ""))
-    utmz = request.COOKIES.get("__utmz")
-    if utmz:
+    if GA_ID:
+        ga_tracker = Tracker(GA_ID, request.META.get('HTTP_HOST', ""))
+        utmz = request.COOKIES.get("__utmz")
+        if utmz:
+            try:
+                campaign = Campaign()
+                campaign.extract_from_utmz(utmz)
+                ga_tracker.campaign = campaign
+            except:
+                pass
+        ga_visitor = Visitor()
         try:
-            campaign = Campaign()
-            campaign.extract_from_utmz(utmz)
-            ga_tracker.campaign = campaign
+            ga_visitor.extract_from_utma(request.COOKIES.get("__utma",""))
         except:
             pass
-    ga_visitor = Visitor()
-    try:
-        ga_visitor.extract_from_utma(request.COOKIES.get("__utma",""))
-    except:
-        pass
-    ga_visitor.ip_address = request.META.get('REMOTE_ADDR')
-    ga_session = Session()
-    try:
-        ga_session.extract_from_utmb(request.COOKIES.get("__utmb"))
-    except:
-        pass
+        ga_visitor.ip_address = request.META.get('REMOTE_ADDR')
+        ga_session = Session()
+        try:
+            ga_session.extract_from_utmb(request.COOKIES.get("__utmb"))
+        except:
+            pass
+    else:
+        ga_tracker = None
 
     # Django 1.5 allow us to define custom User Model, so integrity errors
     # can be raised.
@@ -136,9 +139,10 @@ def complete_process(request, backend, *args, **kwargs):
         user = auth_complete(request, backend, *args, **kwargs)
     except IntegrityError:
         try:
-            ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"CompleteError",
-                                   request.build_absolute_uri()),
-                                   ga_session, ga_visitor)
+            if ga_tracker:
+                ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"CompleteError",
+                                       request.build_absolute_uri()),
+                                       ga_session, ga_visitor)
         except:
             pass
         url = setting('SIGNUP_ERROR_URL', setting('LOGIN_ERROR_URL'))
@@ -193,7 +197,8 @@ def complete_process(request, backend, *args, **kwargs):
                       backend_setting(backend,
                                       'SOCIAL_AUTH_LOGIN_REDIRECT_URL') or \
                       DEFAULT_REDIRECT
-            ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"Complete",
+            if ga_tracker:
+                ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"Complete",
                                    request.build_absolute_uri()),
                                    ga_session, ga_visitor)
         else:
@@ -203,7 +208,8 @@ def complete_process(request, backend, *args, **kwargs):
     else:
         msg = setting('LOGIN_ERROR_MESSAGE', None)
         url = backend_setting(backend, 'LOGIN_ERROR_URL', LOGIN_ERROR_URL)
-        ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"CompleteError",
+        if ga_tracker:
+            ga_tracker.track_event(Event("Logins",backend.AUTH_BACKEND.name+"CompleteError",
                                request.build_absolute_uri()),
                                ga_session, ga_visitor)
     if msg:
